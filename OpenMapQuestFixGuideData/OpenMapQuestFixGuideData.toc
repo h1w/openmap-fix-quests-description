@@ -1,0 +1,22 @@
+## Interface: 16001
+## Title: OpenMap Quest Fix - Guide Data
+## Group: OpenMap
+## Notes: Optional read-only adapter for installed ForeverGuide dungeon data.
+## Notes-ruRU: Необязательное чтение установленных данных подземелий ForeverGuide.
+## Version: 0.1.5
+## Dependencies: ForeverGuide
+## LoadOnDemand: 1
+## X-License: MIT (adapter only; external data retains its original license)
+
+..\ForeverGuide\DungeonData.lua
+..\ForeverGuide\DungeonLoot.lua
+..\ForeverGuide\DungeonTrash.lua
+..\ForeverGuide\ClassData.lua
+..\ForeverGuide\ItemStatsData.lua
+..\ForeverGuide\DalaranData.lua
+..\ForeverGuide\ForeverDungeonUpdates.lua
+..\ForeverGuide\Verified1390.lua
+..\ForeverGuide\Verified1392.lua
+..\ForeverGuide\NewDungeonData.lua
+..\ForeverGuide\DungeonReference.lua
+Export.lua

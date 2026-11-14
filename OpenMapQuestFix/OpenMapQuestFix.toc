@@ -1,0 +1,19 @@
+## Interface: 16001
+## Title: OpenMap Quest Fix
+## Notes: Readable dungeon quests and details inside OpenMap.
+## Notes-ruRU: Задания подземелий, цели и подробности в окне OpenMap.
+## Author: OpenMap Quest Fix contributors
+## Version: 0.1.5
+## Dependencies: OpenMap, Questie
+## OptionalDeps: AzerothCompendium, ForeverDungeonJournal, ForeverGuide, CatQuest
+## X-License: MIT
+
+Locale.lua
+Providers.lua
+Sources.lua
+Data.lua
+Reader.lua
+Navigation.lua
+Panel.lua
+Host.lua
+Core.lua

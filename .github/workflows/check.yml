@@ -1,0 +1,102 @@
+name: Checks and release
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      artifact-name: addon-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: '0.9.5'
+      - name: Install locked check dependencies
+        run: uv sync --locked --python 3.12
+      - name: Check Lua 5.1 syntax and behavior
+        run: uv run --frozen python tests/check.py
+      - name: Build installable ZIP
+        run: uv run --frozen python tools/package.py
+      - name: Verify archive and release version
+        env:
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$RELEASE_TAG" ]]; then
+            uv run --frozen python tests/package.py --tag "$RELEASE_TAG"
+          else
+            uv run --frozen python tests/package.py
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: addon-${{ github.run_id }}
+          path: dist/OpenMapQuestFix-*.zip
+          if-no-files-found: error
+          overwrite: true
+
+  release:
+    needs: check
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ needs.check.outputs.artifact-name }}
+          path: dist
+      - name: Publish verified release archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor HEAD origin/main
+          git fetch --force origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$(git rev-parse HEAD)"
+          version=$(awk '/^## Version: / { print $3; exit }' OpenMapQuestFix/OpenMapQuestFix.toc)
+          test "$RELEASE_TAG" = "v$version"
+          asset="OpenMapQuestFix-${version}.zip"
+          test -s "dist/$asset"
+          notes="$RUNNER_TEMP/release-notes.md"
+          awk -v version="$version" '
+            $0 == "## " version { active=1; next }
+            active && /^## / { exit }
+            active { print }
+          ' CHANGELOG.md > "$notes"
+          printf '\n## Установка\n\nРаспакуйте **обе папки** из `%s` в `Interface/AddOns` и выполните `/reload`. Обязательны OpenMap и Questie. Модуль Guide Data необязателен и используется только с ForeverGuide; файлы и базы сторонних аддонов в архив не включены.\n' "$asset" >> "$notes"
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --draft \
+              --title "OpenMap Quest Fix $version" --notes-file "$notes"
+          fi
+          if gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | grep -Fxq "$asset"; then
+            mkdir -p "$RUNNER_TEMP/published"
+            gh release download "$RELEASE_TAG" --pattern "$asset" --dir "$RUNNER_TEMP/published"
+            cmp "dist/$asset" "$RUNNER_TEMP/published/$asset"
+          else
+            test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
+            gh release upload "$RELEASE_TAG" "dist/$asset"
+          fi
+          if [[ $(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft) == true ]]; then
+            gh release edit "$RELEASE_TAG" --draft=false --latest
+          fi
